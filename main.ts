@@ -1,11 +1,30 @@
-// A working news-image-daily entry (Node 22, standard library only): its image is the entry.png beside this file, and
-// the program copies it to /output/entry.png. A starting point, not a winner: replace the image. The gate takes a
-// whole PNG or JPEG of at most 1 MiB and 1024 by 1024 pixels, and the judge sees exactly the bytes copied.
-//
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// news-image-20261119 — entry point, rewritten by hand in this session.
+// Job is deliberately tiny: ship the pre-rendered entry.png as-is.
+// The picture itself is produced ahead of time (see draw.py); at run
+// time we only have to place a byte-identical copy into whatever
+// output folder the platform points MAKEFUN_OUTPUT_DIR at.
 
-import { copyFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createReadStream, createWriteStream, mkdirSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { pipeline } from "node:stream/promises";
 
-copyFileSync(new URL('./entry.png', import.meta.url), join(process.env.MAKEFUN_OUTPUT_DIR ?? '/output', 'entry.png'));
+// Folder this file lives in — entry.png sits right next to it.
+const here = dirname(fileURLToPath(import.meta.url));
+const sourceFile = join(here, "entry.png");
+
+// Fall back to /output when the platform does not tell us otherwise.
+const targetDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+const targetFile = join(targetDir, "entry.png");
+
+mkdirSync(targetDir, { recursive: true });
+
+// Stream the copy instead of loading the whole PNG into memory.
+await pipeline(createReadStream(sourceFile), createWriteStream(targetFile));
+
+const bytesCopied = statSync(targetFile).size;
+const bytesExpected = statSync(sourceFile).size;
+if (bytesCopied !== bytesExpected) {
+  throw new Error(`copy looks truncated: got ${bytesCopied}, want ${bytesExpected}`);
+}
+console.log(`entry.png copied: ${bytesCopied} bytes -> ${targetFile}`);
